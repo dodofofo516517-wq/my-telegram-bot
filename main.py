@@ -1,6 +1,6 @@
 import asyncio
 from telethon import TelegramClient, events
-from telethon.sessions import StringSession
+from telethon.بsessions import StringSession
 
 # ضع الجلسة الجديدة هنا بعد استخراجها
 SESSION_STRING = "ضع_هنا_الجلسة_الجديدة_التي_استخرجتها" 
