@@ -8,13 +8,13 @@ from telethon.errors import AuthKeyDuplicatedError
 API_ID = 39123507
 API_HASH = "7d18adec71b1e5ce85938c97244b8a7b"
 
-# جلستك الأخيرة الثمينة (تنظيف تلقائي لأي مسافات أو رموز زائدة)
+# جلستك الأخيرة الثمينة (تنظيف آلي لأي مسافات أو رموز زائدة لعدم حرقها)
 SESSION_STRING = "1AZWarzsBu6DBAWJ59pjNLxRxAwDzQFW-YgtGBitTbg23q2Y0ejCkxjjlQs2CYTHaZ3NvscuEKGY6V9TbD9Zm6gz-SaRHPFixz13iAjpcjxdCGbUoDGKJMIuMhhN_t02VINsEwaSNRmaWvNMNe2iXcsTOuxVusFbzfukS-Uxb7vUIimIMHOe0HJ2ewrPsuJ2hgucuIxRGZX0vjzcql3pu_omsHlh9lMQcQ_BdjZnNEe3WRPkVUwOUhaQdnpOR_XUUOvwC1sPG-R5Ey-mzn4OZXV-WE9UByuXDm81hPFqSPnaqOrR2dHhvw_gtlopxGDxoPl5b-nXfVOWW_S42JRXJkZa8RSHL7Qw="
 
 TARGET_CHAT_ID = -1003555828336  # أيدي القروب الكامل (hLoSh)
 TARGET_USER_ID = 8965415461     # أيدي حساب التنبيهات المستهدف
 
-# تهيئة الجلسة مع تنظيفها تماماً لمنع أخطاء الـ Padding والـ Invalid String
+# تهيئة الجلسة مع تنظيفها تماماً لمنع أخطاء الـ Padding
 clean_session = SESSION_STRING.strip().replace('"', '').replace("'", "")
 
 client = TelegramClient(
@@ -28,38 +28,46 @@ client = TelegramClient(
 
 last_log_id = 0
 
-# الدالة الجذرية للمراقبة الذكية عبر سجل المشرفين
+# الدالة الفولاذية للمراقبة الذكية من الجذور
 async def watch_admin_log(group_entity, me_id):
     global last_log_id
     print("👁️ بدأ نظام الفحص الجذري لسجل المشرفين بنجاح...")
     
     # جلب المعرف الأولي لتجنب تكرار الأفعال القديمة عند التشغيل
     try:
-        async for log in client.get_admin_log(group_entity, limit=1, user_id=me_id):
+        async for log in client.get_admin_log(group_entity, limit=1):
             last_log_id = log.id
     except Exception as e:
-        print(f"⚠️ تنبيه أولى: سجل المشرفين فارغ حالياً أو تعذر جلب المعرف الأول: {e}")
+        print(f"⚠️ تنبيه أولي: سجل المشرفين فارغ حالياً أو تعذر جلب المعرف الأول: {e}")
         last_log_id = 0
 
     while True:
         try:
-            # إذا لم يتم تعيين المعرف بعد
             if last_log_id == 0:
-                async for log in client.get_admin_log(group_entity, limit=1, user_id=me_id):
+                async for log in client.get_admin_log(group_entity, limit=1):
                     last_log_id = log.id
                 await asyncio.sleep(2)
                 continue
 
             actions_to_send = []
-            # فحص آخر 15 حدث قام بها حسابك من الجوال
-            async for log in client.get_admin_log(group_entity, limit=15, user_id=me_id):
+            current_max_id = last_log_id
+            
+            # جلب آخر 20 حدث من السجل بدون فلاتر بارامترية مسببة للأخطاء
+            async for log in client.get_admin_log(group_entity, limit=20):
                 if log.id <= last_log_id:
                     break
                 
+                if log.id > current_max_id:
+                    current_max_id = log.id
+                    
+                # [الحل الجذري] الفلترة البرمجية الداخلية: التحقق أن الفاعل هو أنت فقط من جوالك
+                if log.user_id != me_id:
+                    continue
+
                 action_text = None
                 target_person = "غير معروف"
 
-                # 1. تحليل أحداث الإشراف (رفع، نزع، تعديل)
+                # 1. تحليل أحداث الإشراف (رفع، نزع، صلاحيات)
                 if isinstance(log.action, types.ChannelAdminLogEventActionParticipantToggleAdmin):
                     prev = log.action.prev_participant
                     new = log.action.new_participant
@@ -116,30 +124,29 @@ async def watch_admin_log(group_entity, me_id):
                     )
                     actions_to_send.append(alert_msg)
 
+            # حفظ آخر معرف تم الوصول إليه لتفادي التكرار
+            last_log_id = current_max_id
+
             # إرسال الأحداث المرصودة بترتيبها الزمني الصحيح (من الأقدم للأحدث)
             for alert_msg in reversed(actions_to_send):
-                # إرسال لحساب التنبيهات المستهدف
+                # أولاً: إرسال لحساب التنبيهات المستهدف
                 try:
                     await client.send_message(TARGET_USER_ID, alert_msg)
                 except Exception as e:
                     print(f"❌ فشل الإرسال لحساب التنبيهات: {e}")
                 
-                # إرسال إلى المحفوظات (Saved Messages) الخاصة بك فوراً
+                # ثانياً: إرسال إلى المحفوظات (Saved Messages) الخاصة بك فوراً
                 try:
                     await client.send_message('me', alert_msg)
                 except Exception as e:
                     print(f"❌ فشل الإرسال للمحفوظات: {e}")
-
-            # تحديث المعرف بأحدث ID موجود بالسجل لمنع التكرار
-            async for log in client.get_admin_log(group_entity, limit=1, user_id=me_id):
-                last_log_id = max(last_log_id, log.id)
 
         except Exception as e:
             print(f"خطأ دوري في فحص سجل المشرفين: {e}")
             
         await asyncio.sleep(2)
 
-# أمر الفحص السريع للتأكد من الاتصال
+# أمر الفحص السريع للتأكد من استقرارية الربط
 @client.on(events.NewMessage(pattern=r'\.فحص'))
 async def check_status(event):
     me = await client.get_me()
@@ -155,12 +162,11 @@ async def main():
         await client.start()
         print("✅ تم الاتصال بنجاح!")
         
-        # --- حل المشكلة من الجذور (تثبيت الكيانات) ---
         print("🔄 جاري ربط وتثبيت كيان المجموعة وحسابك الشخصي لضمان عمل المراقبة...")
         group_entity = await client.get_entity(TARGET_CHAT_ID)
         me = await client.get_me()
         
-        # تشغيل نظام المراقبة المحدث وتمرير الكيانات الجاهزة له
+        # تشغيل نظام المراقبة المعزز وتمرير الكيانات الجاهزة له
         client.loop.create_task(watch_admin_log(group_entity, me.id))
         
         await client.run_until_disconnected()
