@@ -2,16 +2,15 @@ import asyncio
 import sys
 from telethon import TelegramClient, events, types
 from telethon.sessions import StringSession
-from telethon.errors import AuthKeyDuplicatedError
-# استيراد دالة السجل الرسمية
+from telethon.errors import AuthKeyDuplicatedError, SessionPasswordNeededError
 from telethon.tl.functions.channels import GetAdminLogRequest
 
 # --- البيانات والمعرفات كاملة وجاهزة ومحمية ---
 API_ID = 39123507
 API_HASH = "7d18adec71b1e5ce85938c97244b8a7b"
 
-# جلستك الأخيرة الثمينة 
-SESSION_STRING = "1AZWarzsBu6DBAWJ59pjNLxRxAwDzQFW-YgtGBitTbg23q2Y0ejCkxjjlQs2CYTHaZ3NvscuEKGY6V9TbD9Zm6gz-SaRHPFixz13iAjpcjxdCGbUoDGKJMIuMhhN_t02VINsEwaSNRmaWvNMNe2iXcsTOuxVusFbzfukS-Uxb7vUIimIMHOe0HJ2ewrPsuJ2hgucuIxRGZX0vjzcql3pu_omsHlh9lMQcQ_BdjZnNEe3WRPkVUwOUhaQdnpOR_XUUOvwC1sPG-R5Ey-mzn4OZXV-WE9UByuXDm81hPFqSPnaqOrR2dHhvw_gtlopxGDxoPl5b-nXfVOWW_S42JRXJkZa8RSHL7Qw="
+# ⚠️ استبدل النص أدناه بكود الجلسة الـ String الجديد الذي ستستخرجه الآن ⚠️
+SESSION_STRING = "ضع_هنا_كود_الجلسة_الجديد_الذي_ستستخرجه"
 
 TARGET_CHAT_ID = -1003555828336  # أيدي القروب الكامل (hLoSh)
 TARGET_USER_ID = 8965415461     # أيدي حساب التنبيهات المستهدف
@@ -30,17 +29,16 @@ client = TelegramClient(
 
 last_log_id = 0
 
-# الدالة الجذرية للمراقبة الصحيحة بعد إضافة الفلتر الإجباري
+# الدالة الجذرية للمراقبة الصحيحة
 async def watch_admin_log(group_entity, me_id):
     global last_log_id
-    print("👁️ بدأ نظام الفحص الجذري لسجل المشرفين عبر GetAdminLogRequest...")
+    print("👁️ بدأ نظام الفحص الجذري لسجل المشرفين...")
     
-    # جلب المعرف الأولي لتجنب تكرار الأفعال القديمة عند التشغيل
     try:
         reply = await client(GetAdminLogRequest(
             channel=group_entity,
             q='',
-            events_filter=types.ChannelAdminLogEventsFilter(),  # حل المشكلة هنا
+            events_filter=types.ChannelAdminLogEventsFilter(),
             max_id=0,
             min_id=0,
             limit=1
@@ -57,7 +55,7 @@ async def watch_admin_log(group_entity, me_id):
                 reply = await client(GetAdminLogRequest(
                     channel=group_entity,
                     q='',
-                    events_filter=types.ChannelAdminLogEventsFilter(),  # حل المشكلة هنا
+                    events_filter=types.ChannelAdminLogEventsFilter(),
                     max_id=0,
                     min_id=0,
                     limit=1
@@ -70,11 +68,10 @@ async def watch_admin_log(group_entity, me_id):
             actions_to_send = []
             current_max_id = last_log_id
             
-            # جلب آخر 20 حدث مع الفلتر الصحيح لـ Telethon
             reply = await client(GetAdminLogRequest(
                 channel=group_entity,
                 q='',
-                events_filter=types.ChannelAdminLogEventsFilter(),  # حل المشكلة هنا
+                events_filter=types.ChannelAdminLogEventsFilter(),
                 max_id=0,
                 min_id=0,
                 limit=20
@@ -88,14 +85,12 @@ async def watch_admin_log(group_entity, me_id):
                     if log.id > current_max_id:
                         current_max_id = log.id
                         
-                    # التحقق البرمجي أن الفاعل هو أنت فقط من جوالك
                     if log.user_id != me_id:
                         continue
 
                     action_text = None
                     target_person = "غير معروف"
 
-                    # 1. تحليل أحداث الإشراف (رفع، نزع، صلاحيات)
                     if isinstance(log.action, types.ChannelAdminLogEventActionParticipantToggleAdmin):
                         prev = log.action.prev_participant
                         new = log.action.new_participant
@@ -116,7 +111,6 @@ async def watch_admin_log(group_entity, me_id):
                         else:
                             action_text = "❌ نزعت الاشراف من شخص"
 
-                    # 2. تحليل أحداث الحظر والكتم وإلغاء الحظر
                     elif isinstance(log.action, types.ChannelAdminLogEventActionParticipantToggleBanned):
                         prev = log.action.prev_participant
                         new = log.action.new_participant
@@ -137,7 +131,6 @@ async def watch_admin_log(group_entity, me_id):
                         else:
                             action_text = "🔓 ألغيت الحظر عن شخص ( Unban )"
 
-                    # 3. تحليل حدث تغيير اسم المجموعة
                     elif isinstance(log.action, types.ChannelAdminLogEventActionChangeTitle):
                         action_text = f"✏️ غيرت اسم المجموعه إلى: **{log.action.new_title}**"
                         target_person = "المجموعة نفسها"
@@ -152,18 +145,14 @@ async def watch_admin_log(group_entity, me_id):
                         )
                         actions_to_send.append(alert_msg)
 
-            # تحديث معرف السجل لمنع تكرار الرسائل القديمة
             last_log_id = current_max_id
 
-            # إرسال الأحداث المرصودة بترتيبها الزمني الصحيح (من الأقدم للأحدث)
             for alert_msg in reversed(actions_to_send):
-                # أولاً: إرسال لحساب التنبيهات المستهدف
                 try:
                     await client.send_message(TARGET_USER_ID, alert_msg)
                 except Exception as e:
                     print(f"❌ فشل الإرسال لحساب التنبيهات: {e}")
                 
-                # ثانياً: إرسال إلى المحفوظات (Saved Messages) الخاصة بك فوراً
                 try:
                     await client.send_message('me', alert_msg)
                 except Exception as e:
@@ -174,32 +163,29 @@ async def watch_admin_log(group_entity, me_id):
             
         await asyncio.sleep(2)
 
-# أمر الفحص السريع للتأكد من استقرارية الربط
 @client.on(events.NewMessage(pattern=r'\.فحص'))
 async def check_status(event):
     me = await client.get_me()
     if event.sender_id == me.id:
-        await event.edit("✅ السورس مستقر ويعمل من الجذور! المراقبة والمحفوظات تعمل الآن بأعلى كفاءة بعد إرسال الفلتر الصافي.")
+        await event.edit("✅ السورس مستقر ويعمل من الجذور! المراقبة تعمل الآن بأعلى كفاءة بالجلسة الجديدة.")
 
 async def main():
-    print("⏳ [نظام الحماية] جاري الانتظار 15 ثانية لتهيئة سيرفرات Railway بسلامة ومنع تداخل الجلسات...")
-    await asyncio.sleep(15)
+    print("⏳ [نظام الأمان] جاري الانتظار 30 ثانية كاملة لقتل أي اتصال قديم في Railway وتجنب حرق الجلسة...")
+    await asyncio.sleep(30)
     
     print("🚀 جاري الاتصال بحساب السورس...")
     try:
         await client.start()
-        print("✅ تم الاتصال بنجاح!")
+        print("✅ تم الاتصال بنجاح بالجلسة الجديدة!")
         
-        print("🔄 جاري ربط وتثبيت كيان المجموعة وحسابك الشخصي لضمان عمل المراقبة...")
         group_entity = await client.get_entity(TARGET_CHAT_ID)
         me = await client.get_me()
         
-        # تشغيل نظام المراقبة المحدث وتمرير الكيانات الجاهزة له
         client.loop.create_task(watch_admin_log(group_entity, me.id))
-        
         await client.run_until_disconnected()
+        
     except AuthKeyDuplicatedError:
-        print("❌ خطأ حرج: الجلسة مكررة أو تم استخدامها في مكان آخر في نفس الوقت!")
+        print("❌ خطأ حرج: الجلسة الحالية محروقة أو مكررة! يرجى استخراج جلسة جديدة وتحديث متغير SESSION_STRING.")
         sys.exit(1)
     except Exception as e:
         print(f"❌ حدث خطأ غير متوقع أثناء التشغيل: {e}")
