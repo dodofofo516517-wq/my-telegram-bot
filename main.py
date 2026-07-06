@@ -1,97 +1,107 @@
-import asyncio
 import os
 import sys
-import time
-from telethon import TelegramClient, events
+import asyncio
+from telethon import TelegramClient, errors
 
-# --- إعدادات الحساب (ضع بياناتك هنا) ---
-API_ID = 123456        # استبدله بـ API ID الخاص بك
-API_HASH = 'your_api_hash_here'
+# ⚙️ إعدادات الحساب (ضع بياناتك هنا أو اربطها بمتغيرات البيئة في Railway)
+API_ID = int(os.environ.get("API_ID", 1234567))          # استبدله بـ API ID الخاص بك
+API_HASH = os.environ.get("API_HASH", "your_api_hash")  # استبدله بـ API HASH الخاص بك
+SESSION_STRING = os.environ.get("SESSION_STRING", "session_name") # اسم الجلسة أو الـ String Session
+TARGET_CHAT_ID = int(os.environ.get("TARGET_CHAT_ID", -100123456789)) # آيدي المجموعة المراقبة
 
-# متغير عالمي لتتبع آخر وقت استجاب فيه الرادار
-last_radar_activity = time.time()
+# إنشاء كائن العميل (Client)
+client = TelegramClient(SESSION_STRING, API_ID, API_HASH)
 
-# إعداد العميل مع ميزات إعادة الاتصال التلقائي اللانهائي وتوسيع سعة البيانات
-client = TelegramClient(
-    'radar_session', 
-    API_ID, 
-    API_HASH,
-    connection_retries=None,  # محاولات إعادة اتصال غير محدودة عند انقطاع الإنترنت
-    auto_reconnect=True,      # إعادة اتصال تلقائي فوري
-    flood_sleep_threshold=86400 # التعامل الذكي مع حظر الفلود المؤقت
-)
-
-# --- 1. المعالج الخلفي (العامل الذكي) ---
-async def async_worker_processor(event):
-    """
-    هنا تضع منطق الرادار الخاص بك (فحص الكلمات، التنظيف، إلخ).
-    هذه الدالة تعمل في الخلفية تماماً دون تأخير الرادار الأساسي.
-    """
+# 1️⃣ سيرفر الاستجابة الفورية الوهمي (لخداع ريلواي وتخطي الفحص بنجاح)
+async def handle_railway_ping(reader, writer):
+    """يستقبل طلب ريلواي ويرد بـ OK فوراً لمنع تعليق الحاوية"""
     try:
-        # مثال: طباعة نص الرسالة القادمة
-        text = event.raw_text
-        print(f"[{time.strftime('%X')}] الرادار رصد رسالة: {text[:30]}...")
-        
-        # تنبيه: إذا كنت تحتاج لتأخير، استخدم دائماً asyncio.sleep وليس time.sleep
-        await asyncio.sleep(0.1) 
-        
+        await reader.read(1024)
+        response = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 2\r\n\r\nOK"
+        writer.write(response.encode('utf-8'))
+        await writer.drain()
+    except Exception:
+        pass
+    finally:
+        writer.close()
+        await writer.wait_closed()
+
+async def start_dummy_server():
+    """تشغيل السيرفر على البورت الذي تحدده ريلواي ديناميكياً"""
+    port = int(os.environ.get("PORT", 8080))
+    try:
+        server = await asyncio.start_server(handle_railway_ping, "0.0.0.0", port)
+        print(f"🎯 [سيرفر الوهمي] تم تشغيل السيرفر بنجاح على المنفذ {port} لإرضاء ريلواي!")
+        # تشغيل السيرفر في الخلفية للأبد دون تعطيل الكود الأساسي
+        asyncio.create_task(server.serve_forever())
     except Exception as e:
-        print(f"خطأ أثناء معالجة البيانات في الخلفية: {e}")
+        print(f"⚠️ تحذير السيرفر الوهمي: لم يتمكن من حجز المنفذ {port}: {e}")
 
-# --- 2. الرادار الأساسي (المستقبل الفوري) ---
-@client.on(events.NewMessage(incoming=True))
-async def radar_main_handler(event):
-    global last_radar_activity
-    # تحديث العداد فوراً لإثبات أن الرادار حيّ ويعمل
-    last_radar_activity = time.time()
-    
-    # الحل الجذري: الرادار لا ينفذ الكود بنفسه، بل يوكّل المهمة للخلفية وينصرف فوراً
-    asyncio.create_task(async_worker_processor(event))
-
-# --- 3. نظام الحارس الذاتي (Watchdog) ---
-async def radar_watchdog():
-    """
-    وظيفة هذا الحارس هي مراقبة الرادار، إذا تجمد الاتصال مع التليجرام 
-    ولم تصل أي تحديثات لفترة طويلة (مثلاً 10 دقائق) والجروبات نشطة، 
-    سيقوم بإعادة تشغيل البرنامج كاملاً كلياً وجذرياً.
-    """
-    global last_radar_activity
-    print("الحارس الذاتي (Watchdog) يعمل الآن في الخلفية...")
-    
+# 2️⃣ دالة الرادار (تأكد من تعديل محتواها حسب حاجتك)
+async def watch_admin_log(group_entity, me_id):
+    print("👁️ [رادار المراقبة] تم التنشيط وبدء مسح سجل المشرفين بالخلفية...")
     while True:
-        await asyncio.sleep(60) # يفحص حالة الرادار كل دقيقة
-        
-        # حساب الوقت المنقضي منذ آخر رسالة
-        time_since_last_message = time.time() - last_radar_activity
-        
-        # إذا مرت 10 دقائق (600 ثانية) بدون استجابة (يمكنك تعديل الوقت حسب حاجتك)
-        if time_since_last_message > 600:
-            print("🚨 تحذير: تم كشف تجمد أو خمول غير طبيعي في الرادار!")
-            print("جاري إعادة تشغيل السكريبت كاملاً من الجذور تلقائياً...")
+        try:
+            # --- 🛠️ ضع أوامر الرادار الخاصة بك هنا 🛠️ ---
+            # مثال: جلب آخر الأحداث من سجل المشرفين
+            # async for event in client.iter_admin_log(group_entity, limit=5):
+            #     print(f"حدث جديد: {event.action}")
             
-            # إنهاء العميل بأمان قبل إعادة التشغيل
-            try:
-                await client.disconnect()
-            except:
-                pass
-                
-            # الأمر السحري لإعادة تشغيل الملف برمجياً وكأنه فتح لأول مرة
-            os.execv(sys.executable, ['python'] + sys.argv)
+            # انتظام الفحص (مثلاً كل 10 ثوانٍ)
+            await asyncio.sleep(10)
+            
+        except errors.FloodWaitError as e:
+            print(f"⏳ [تنبيه الحماية] تيليجرام يطلب التهدئة. انتظار لـ {e.seconds} ثانية...")
+            await asyncio.sleep(e.seconds)
+        except Exception as e:
+            # طباعة الخطأ بداخل الرادار حتى لا يموت صامتاً
+            print(f"⚠️ [خطأ داخل الرادار]: {e}")
+            await asyncio.sleep(15) # انتظار قبل إعادة المحاولة لمنع استهلاك المعالج عند الأخطاء المستمرة
 
-# --- 4. نقطة الانطلاق الأساسية ---
+# 3️⃣ الدالة الرئيسية المحصنة لـ التطبيق
 async def main():
-    print("جاري تشغيل الرادار...")
-    await client.start()
-    print("⚡ الرادار متصل الآن ويعمل بأقصى سرعة استجابة!")
-    
-    # تشغيل نظام الحارس الذاتي بالتوازي مع البوت
-    asyncio.create_task(radar_watchdog())
-    
-    # الحفاظ على تشغيل البوت مستمراً
-    await client.run_until_disconnected()
+    # 🌟 خطوة 1: تشغيل سيرفر الاستجابة الفورية لريلواي لمنع الـ Crash البدائي
+    await start_dummy_server()
 
+    # 🌟 خطوة 2: جدار الصمت المطلق (بروتوكول الـ 45 ثانية لتدمير النسخة القديمة)
+    print("⏳ [حصن الأمان] تم إرضاء ريلواي! جاري الانتظار لـ 45 ثانية صامتة ليموت السيرفر القديم تماماً وتأمين جلستك الفاخرة من الحرق...")
+    await asyncio.sleep(45)
+    
+    print("🚀 الساحة آمنة بنسبة 100%! جاري الاتصال الرسمي والوحيد بتيليجرام...")
+    try:
+        # الاتصال بالحساب
+        await client.start()
+        print("✅ تم الاتصال بنجاح ساحق وثبات أبدي!")
+        
+        # جلب معلومات الكيان والحساب
+        group_entity = await client.get_entity(TARGET_CHAT_ID)
+        me = await client.get_me()
+        
+        # تشغيل رادار المراقبة الآمن وحفظه في متغير لمنع حذفه تلقائياً من الذاكرة
+        radar_task = asyncio.create_task(watch_admin_log(group_entity, me.id))
+        
+        # مراقبة حالة الرادار وطباعة أي خطأ قاتل يحدث داخله فوراً
+        def check_radar_status(task):
+            try:
+                task.result()
+            except Exception as e:
+                print(f"❌ [كارثة برمجية] الرادار توقف تماماً عن العمل! السبب: {e}")
+
+        radar_task.add_done_callback(check_radar_status)
+        
+        # استمرار تشغيل البوت ومنعه من التوقف
+        await client.run_until_disconnected()
+        
+    except errors.AuthKeyDuplicatedError:
+        print("❌ خطأ قاطع: هذه الجلسة تعرضت للتداخل والاتصال المزدوج (الجلسة احترقت أو قيد الاستخدام في مكان آخر).")
+        sys.exit(1)
+    except Exception as e:
+        print(f"❌ خطأ تشغيل غير متوقع: {e}")
+        sys.exit(1)
+
+# ✅ تشغيل التطبيق بالشرط الصحيح والآمن لبايثون
 if __name__ == '__main__':
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
-        print("\nتم إيقاف الرادار يدوياً.")
+        print("🛑 تم إيقاف البوت يدوياً.")
