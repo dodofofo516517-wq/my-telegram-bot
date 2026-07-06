@@ -5,59 +5,50 @@ from telethon.sessions import StringSession
 from telethon.tl.functions.account import GetAuthorizationsRequest
 
 # --- الإعدادات ---
-SESSION_STRING = os.environ.get("SESSION_STRING", "")
+# الجلسة المباشرة التي زودتني بها
+SESSION_STRING = "1AZWarzsBu7ZqkyVaeYivrdM-nhqJg9TFUx44GHlgQRrcpd0vchjVvroNHxDWpCBU2K03fyw2kpA3jXwMYDh9k4-EvHKlh4XITdhSfvXpgH66ujafg8tYvYLOcPvK6wMB1-IhIrRrKQZITOAlw1VqZ4syROvRPbjWmTw1GGchZ_WBicPUHox35s_vzr9hKeAOKMj09Pe3gg50tnJ5brKzILSwAT78gdhA54QDIozPWmMhjnhR_HD9BUN5jfBK8nAAJyxoqtZf5pYotpZMDDYbt0ox0oUmZoNXiBt71HPSZM33s0MhGpz-ayQQQEBIFQqLjkY94k84m42c9kOIhIxuyhd9CZ6T_lY="
 API_ID = 39123507
 API_HASH = "7d18adec71b1e5ce85938c97244b8a7b"
-TARGET_USER = "hLoshByHere" # يوزر حساب التنبيهات
-TARGET_CHAT_ID = -1002245366530 # تأكد من الأيدي الصحيح للمجموعة
+TARGET_USER = "hLoshByHere" 
+# الأيدي الجديد الذي زودتني به
+TARGET_CHAT_ID = -1003712727917 
+# رابط المجموعة للمرجع: https://t.me/+8Djv1gteUwpjOGM0
 
 client = TelegramClient(StringSession(SESSION_STRING.strip()), API_ID, API_HASH)
 
-# مراقبة كل الأفعال (طرد، إضافة، تغيير صلاحيات، إلخ)
+# 1. أمر الفحص
+@client.on(events.NewMessage(pattern=r'\.فحص'))
+async def check_bot(event):
+    await event.edit("✅ السورس يعمل بكامل طاقته ويراقب أفعالك في القروب!")
+
+# 2. مراقبة كل أفعالك (أنت فقط) في المجموعة المحددة
 @client.on(events.ChatAction)
-async def monitor_all_actions(event):
-    # 1. مراقبة المجموعة المحددة فقط
+async def monitor_my_actions(event):
     if event.chat_id != TARGET_CHAT_ID:
         return
-
-    # 2. مراقبة أفعالك أنت فقط (Sender)
-    # ملاحظة: إذا كان الحدث صادر عنك، فإن event.action_message.from_id سيساوي الأيدي الخاص بك
+    
     me = await client.get_me()
-    if event.action_message and event.action_message.sender_id != me.id:
-        return
-
-    try:
-        # جلب تفاصيل الجهاز الحالي
-        auths = await client(GetAuthorizationsRequest())
-        current_device = "غير معروف"
-        for auth in auths.authorizations:
-            if auth.current:
-                current_device = f"{auth.device_model} ({auth.platform})"
-
-        # تجهيز تفاصيل الحدث
-        action_desc = "حدث غير معروف"
-        if event.user_added: action_desc = "إضافة عضو"
-        elif event.user_kicked: action_desc = "طرد عضو"
-        elif event.admin_rights_changed: action_desc = "تغيير صلاحيات مشرف"
-
-        msg = (
-            f"👤 **نشاط جديد من حسابك (السورس):**\n"
-            f"📝 **الحدث:** {action_desc}\n"
-            f"💬 **المجموعة:** {event.chat.title}\n"
-            f"💻 **الجهاز المنفذ:** {current_device}\n\n"
-            f"ℹ️ التفاصيل: {event.stringify()[:100]}"
-        )
-        await client.send_message(TARGET_USER, msg)
-    except Exception as e:
-        print(f"خطأ في المراقبة: {e}")
+    # التأكد أن النشاط صادر منك أنت
+    if event.action_message and event.action_message.sender_id == me.id:
+        try:
+            msg = f"👤 **نشاط جديد قمت به في القروب:**\n\n**الحدث:** {event.stringify()[:150]}"
+            await client.send_message(TARGET_USER, msg)
+        except Exception as e:
+            print(f"Error: {e}")
 
 async def main():
+    await client.start()
+    print("🚀 سورس المراقبة يعمل بنجاح..")
+    # تنبيه عند التشغيل بالأجهزة المتصلة
     try:
-        await client.start()
-        print("🚀 السورس يعمل ويراقب أفعالك أنت فقط...")
-        await client.run_until_disconnected()
-    except Exception as e:
-        print(f"فشل الاتصال: {e}")
+        auths = await client(GetAuthorizationsRequest())
+        current = next((a for a in auths.authorizations if a.current), None)
+        if current:
+            await client.send_message(TARGET_USER, f"📱 **السورس بدأ العمل الآن!**\nجهازك الحالي المتصل: {current.device_model}")
+    except:
+        pass
+        
+    await client.run_until_disconnected()
 
 if __name__ == '__main__':
     asyncio.run(main())
