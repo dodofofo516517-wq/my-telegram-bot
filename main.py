@@ -2,16 +2,15 @@ import asyncio
 from telethon import TelegramClient, events
 from telethon.sessions import StringSession
 
-# ضع بياناتك هنا
+# ضع الجلسة الجديدة هنا بعد استخراجها
+SESSION_STRING = "ضع_هنا_الجلسة_الجديدة_التي_استخرجتها" 
 API_ID = 39123507
 API_HASH = "7d18adec71b1e5ce85938c97244b8a7b"
-# استخرج StringSession جديدة تماماً ولا تفتحها في تطبيق آخر
-SESSION_STRING = "هنا_ضع_الجلسة_الجديدة" 
 
 # 1. التعريف أولاً
 client = TelegramClient(StringSession(SESSION_STRING.strip()), API_ID, API_HASH)
 
-# 2. تعريف الأوامر بعد تعريف الكلينت
+# 2. الأوامر تأتي بعد تعريف الكلينت
 @client.on(events.NewMessage(pattern=r'\.فحص'))
 async def check_bot(event):
     await event.edit("✅ السورس يعمل بنجاح!")
