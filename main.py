@@ -3,7 +3,7 @@ import sys
 from telethon import TelegramClient, events, types
 from telethon.sessions import StringSession
 from telethon.errors import AuthKeyDuplicatedError
-# [الحل الصحيح] استيراد طلب سجل المشرفين الرسمي لمكتبة Telethon
+# استيراد دالة السجل الرسمية
 from telethon.tl.functions.channels import GetAdminLogRequest
 
 # --- البيانات والمعرفات كاملة وجاهزة ومحمية ---
@@ -30,7 +30,7 @@ client = TelegramClient(
 
 last_log_id = 0
 
-# الدالة الجذرية للمراقبة الصحيحة عبر تليثون
+# الدالة الجذرية للمراقبة الصحيحة بعد إضافة الفلتر الإجباري
 async def watch_admin_log(group_entity, me_id):
     global last_log_id
     print("👁️ بدأ نظام الفحص الجذري لسجل المشرفين عبر GetAdminLogRequest...")
@@ -40,6 +40,7 @@ async def watch_admin_log(group_entity, me_id):
         reply = await client(GetAdminLogRequest(
             channel=group_entity,
             q='',
+            events_filter=types.ChannelAdminLogEventsFilter(),  # حل المشكلة هنا
             max_id=0,
             min_id=0,
             limit=1
@@ -56,6 +57,7 @@ async def watch_admin_log(group_entity, me_id):
                 reply = await client(GetAdminLogRequest(
                     channel=group_entity,
                     q='',
+                    events_filter=types.ChannelAdminLogEventsFilter(),  # حل المشكلة هنا
                     max_id=0,
                     min_id=0,
                     limit=1
@@ -68,10 +70,11 @@ async def watch_admin_log(group_entity, me_id):
             actions_to_send = []
             current_max_id = last_log_id
             
-            # جلب آخر 20 حدث باستخدام الكود الصحيح لـ Telethon
+            # جلب آخر 20 حدث مع الفلتر الصحيح لـ Telethon
             reply = await client(GetAdminLogRequest(
                 channel=group_entity,
                 q='',
+                events_filter=types.ChannelAdminLogEventsFilter(),  # حل المشكلة هنا
                 max_id=0,
                 min_id=0,
                 limit=20
@@ -176,7 +179,7 @@ async def watch_admin_log(group_entity, me_id):
 async def check_status(event):
     me = await client.get_me()
     if event.sender_id == me.id:
-        await event.edit("✅ السورس مستقر ويعمل من الجذور! المراقبة والمحفوظات تعمل الآن بأعلى كفاءة بعد تصحيح دالة السجل.")
+        await event.edit("✅ السورس مستقر ويعمل من الجذور! المراقبة والمحفوظات تعمل الآن بأعلى كفاءة بعد إرسال الفلتر الصافي.")
 
 async def main():
     print("⏳ [نظام الحماية] جاري الانتظار 15 ثانية لتهيئة سيرفرات Railway بسلامة ومنع تداخل الجلسات...")
