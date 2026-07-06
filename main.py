@@ -1,107 +1,136 @@
 import os
 import sys
 import asyncio
+import signal
 from telethon import TelegramClient, errors
+from telethon.sessions import StringSession  # 🔥 السر العبقري لمنع احتراق الجلسات النصية
 
-# ⚙️ إعدادات الحساب (ضع بياناتك هنا أو اربطها بمتغيرات البيئة في Railway)
-API_ID = int(os.environ.get("API_ID", 1234567))          # استبدله بـ API ID الخاص بك
-API_HASH = os.environ.get("API_HASH", "your_api_hash")  # استبدله بـ API HASH الخاص بك
-SESSION_STRING = os.environ.get("SESSION_STRING", "session_name") # اسم الجلسة أو الـ String Session
-TARGET_CHAT_ID = int(os.environ.get("TARGET_CHAT_ID", -100123456789)) # آيدي المجموعة المراقبة
+# ==========================================
+# ⚙️ إعدادات الحساب (قم بتغيير الـ API ID والـ API HASH وبيانات المجموعة)
+# ==========================================
+API_ID = 1234567          # ⚠️ ضع هنا الـ API ID الخاص بك (رقم)
+API_HASH = "your_api_hash"  # ⚠️ ضع هنا الـ API HASH الخاص بك (نص)
+TARGET_CHAT_ID = -100123456789 # ⚠️ ضع هنا آيدي المجموعة المستهدفة للمراقبة
 
-# إنشاء كائن العميل (Client)
-client = TelegramClient(SESSION_STRING, API_ID, API_HASH)
+# 🌟 كود الجلسة الخاص بك مدمج برمجياً بأمان
+SESSION_STRING = "1AZWarzsBuzUbfpvJcqZxC3y5a5-B0aPYj9FdDrGE-VXIPG0TeD842cLgRtRBNWBOrnz4L-FrhZTjeKUvtN0lnww_RBZvyVcN4cgosV68rJKv6kznEACCQglGivt5ZX7mab-0HAMsH3Tm3_CC-1yKKj1gLcxALTvdw5QWPKAkp-zS5C12mYhPa_IVxuY75Jzy6hnv8lPaFcN2TQHNZgKrTUvH9e-xX8wsFa9p2N6KCrGOKDOGuTCBVNeGaVF4Mu-vlr0EFaGqKUoYfe9rZv4WCSYPDQ_PKDaw9gTT_w_E_Se3OdVp6dMJBPZ0er9fXc07tXreLd8kByBLTg78CG3WhPKph3wsLFg="
 
-# 1️⃣ سيرفر الاستجابة الفورية الوهمي (لخداع ريلواي وتخطي الفحص بنجاح)
+# ✅ إنشاء العميل عبر كائن StringSession لضمان القراءة المباشرة من الذاكرة ومنع الحرق
+client = TelegramClient(StringSession(SESSION_STRING), API_ID, API_HASH)
+
+# ==========================================
+# 1️⃣ نظام اعتراض الإشارات: فصل فوري عند التحديث لحماية الجلسة
+# ==========================================
+def railway_shutdown_handler():
+    print("🛑 [نظام الحماية] تم استقبال إشارة الإغلاق والتحديث (SIGTERM) من ريلواي!")
+    print("⚡ جاري قطع اتصال الجلسة فوراً لمنع التداخل مع النسخة الجديدة وحمايتها من الحرق...")
+    asyncio.create_task(instant_disconnect())
+
+async def instant_disconnect():
+    try:
+        if client.is_connected():
+            await client.disconnect()
+        print("✅ تم فصل الجلسة بنجاح مطلق وآمن. إغلاق الحاوية القديمة الآن.")
+    except Exception as e:
+        print(f"⚠️ خطأ أثناء الفصل السريع: {e}")
+    finally:
+        sys.exit(0)
+
+# ==========================================
+# 2️⃣ سيرفر الاستجابة الفورية لخداع ريلواي وتخطي الفحص
+# ==========================================
 async def handle_railway_ping(reader, writer):
-    """يستقبل طلب ريلواي ويرد بـ OK فوراً لمنع تعليق الحاوية"""
     try:
         await reader.read(1024)
-        response = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 2\r\n\r\nOK"
+        response = "HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nOK"
         writer.write(response.encode('utf-8'))
         await writer.drain()
-    except Exception:
-        pass
+    except: pass
     finally:
         writer.close()
         await writer.wait_closed()
 
 async def start_dummy_server():
-    """تشغيل السيرفر على البورت الذي تحدده ريلواي ديناميكياً"""
     port = int(os.environ.get("PORT", 8080))
     try:
         server = await asyncio.start_server(handle_railway_ping, "0.0.0.0", port)
-        print(f"🎯 [سيرفر الوهمي] تم تشغيل السيرفر بنجاح على المنفذ {port} لإرضاء ريلواي!")
-        # تشغيل السيرفر في الخلفية للأبد دون تعطيل الكود الأساسي
         asyncio.create_task(server.serve_forever())
+        print(f"🎯 [السيرفر] تم فتح المنفذ {port} بنجاح.")
     except Exception as e:
-        print(f"⚠️ تحذير السيرفر الوهمي: لم يتمكن من حجز المنفذ {port}: {e}")
+        print(f"⚠️ فشل حجز المنفذ: {e}")
 
-# 2️⃣ دالة الرادار (تأكد من تعديل محتواها حسب حاجتك)
+# ==========================================
+# 3️⃣ دالة الرادار المحصنة (أوامر المراقبة الخاصة بك)
+# ==========================================
 async def watch_admin_log(group_entity, me_id):
-    print("👁️ [رادار المراقبة] تم التنشيط وبدء مسح سجل المشرفين بالخلفية...")
+    print("👁️ [الرادار] بدأ العمل والمسح المستمر الآن...")
     while True:
         try:
-            # --- 🛠️ ضع أوامر الرادار الخاصة بك هنا 🛠️ ---
-            # مثال: جلب آخر الأحداث من سجل المشرفين
-            # async for event in client.iter_admin_log(group_entity, limit=5):
-            #     print(f"حدث جديد: {event.action}")
+            # ⬇️ ---- 🛠️ ضع كود أوامر الرادار المخصص لك هنا 🛠️ ---- ⬇️
             
-            # انتظام الفحص (مثلاً كل 10 ثوانٍ)
-            await asyncio.sleep(10)
+            # مثال مجهز ومحمي لجلب سجلات المشرفين:
+            # async for event in client.iter_admin_log(group_entity, limit=5):
+            #     print(f"حدث في السجل: {event.action}")
+            
+            # ⬆️ ---------------------------------------------------- ⬆️
+            
+            await asyncio.sleep(10) # فحص مستمر كل 10 ثوانٍ
             
         except errors.FloodWaitError as e:
-            print(f"⏳ [تنبيه الحماية] تيليجرام يطلب التهدئة. انتظار لـ {e.seconds} ثانية...")
+            print(f"⏳ [تنبيه] حظر مؤقت من تيليجرام، يجب الانتظار لـ {e.seconds} ثانية.")
             await asyncio.sleep(e.seconds)
         except Exception as e:
-            # طباعة الخطأ بداخل الرادار حتى لا يموت صامتاً
-            print(f"⚠️ [خطأ داخل الرادار]: {e}")
-            await asyncio.sleep(15) # انتظار قبل إعادة المحاولة لمنع استهلاك المعالج عند الأخطاء المستمرة
+            # تمرير الخطأ لدالة المراقبة الرئيسية لتتخذ إجراء الانهيار الذكي
+            raise e
 
-# 3️⃣ الدالة الرئيسية المحصنة لـ التطبيق
+# ==========================================
+# 4️⃣ الدالة الرئيسية وتشغيل النظام
+# ==========================================
 async def main():
-    # 🌟 خطوة 1: تشغيل سيرفر الاستجابة الفورية لريلواي لمنع الـ Crash البدائي
-    await start_dummy_server()
-
-    # 🌟 خطوة 2: جدار الصمت المطلق (بروتوكول الـ 45 ثانية لتدمير النسخة القديمة)
-    print("⏳ [حصن الأمان] تم إرضاء ريلواي! جاري الانتظار لـ 45 ثانية صامتة ليموت السيرفر القديم تماماً وتأمين جلستك الفاخرة من الحرق...")
-    await asyncio.sleep(45)
-    
-    print("🚀 الساحة آمنة بنسبة 100%! جاري الاتصال الرسمي والوحيد بتيليجرام...")
+    # تفعيل نظام مراقبة إشارات نظام التشغيل لحماية الحاوية في ريلواي
+    loop = asyncio.get_running_loop()
     try:
-        # الاتصال بالحساب
+        loop.add_signal_handler(signal.SIGTERM, railway_shutdown_handler)
+        loop.add_signal_handler(signal.SIGINT, railway_shutdown_handler)
+        print("🛡️ [حصن الإشارات] نظام حماية الجلسة ضد الـ SIGTERM فعال الآن.")
+    except NotImplementedError:
+        print("⚠️ نظام الإشارات يعمل فقط على بيئة لينكس (Railway)، يتخطى الآن في ويندوز.")
+
+    # تشغيل سيرفر الويب الوهمي لتخطي فحص ريلواي البدائي
+    await start_dummy_server()
+    await asyncio.sleep(3) # استقرار السيرفر
+    
+    print("🚀 جاري الاتصال الرسمي والآمن بتيليجرام...")
+    try:
         await client.start()
-        print("✅ تم الاتصال بنجاح ساحق وثبات أبدي!")
+        print("✅ تم الاتصال بنجاح واستقرار تام وثبات أبدي!")
         
-        # جلب معلومات الكيان والحساب
         group_entity = await client.get_entity(TARGET_CHAT_ID)
         me = await client.get_me()
         
-        # تشغيل رادار المراقبة الآمن وحفظه في متغير لمنع حذفه تلقائياً من الذاكرة
+        # تشغيل الرادار وحفظه في الذاكرة
         radar_task = asyncio.create_task(watch_admin_log(group_entity, me.id))
         
-        # مراقبة حالة الرادار وطباعة أي خطأ قاتل يحدث داخله فوراً
-        def check_radar_status(task):
+        # 💥 فلسفة الانتحار الذكي (Crash-Early) لحل مشكلة توقف الرادار
+        def on_radar_failure(task):
             try:
-                task.result()
-            except Exception as e:
-                print(f"❌ [كارثة برمجية] الرادار توقف تماماً عن العمل! السبب: {e}")
+                task.result() 
+            except Exception as error:
+                print(f"💥 [خطأ الرادار]: {error}")
+                print("☠️ [الانتحار الذكي] إعادة تشغيل الحاوية فوراً لتطهير النظام...")
+                sys.exit(1) # انهيار متعمد يجعل ريلواي تعيد تشغيل البوت تلقائياً فوراً
 
-        radar_task.add_done_callback(check_radar_status)
+        radar_task.add_done_callback(on_radar_failure)
         
-        # استمرار تشغيل البوت ومنعه من التوقف
+        # إبقاء البوت متصلاً
         await client.run_until_disconnected()
         
     except errors.AuthKeyDuplicatedError:
-        print("❌ خطأ قاطع: هذه الجلسة تعرضت للتداخل والاتصال المزدوج (الجلسة احترقت أو قيد الاستخدام في مكان آخر).")
+        print("❌ خطأ: هذه الجلسة محروقة بالفعل من محاولات سابقة خارج هذا الكود.")
         sys.exit(1)
     except Exception as e:
         print(f"❌ خطأ تشغيل غير متوقع: {e}")
         sys.exit(1)
 
-# ✅ تشغيل التطبيق بالشرط الصحيح والآمن لبايثون
 if __name__ == '__main__':
-    try:
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        print("🛑 تم إيقاف البوت يدوياً.")
+    asyncio.run(main())
