@@ -4,60 +4,67 @@ from telethon import TelegramClient, events
 from telethon.sessions import StringSession
 from telethon.tl.functions.account import GetAuthorizationsRequest
 
-# --- البيانات ---
-# 1. حساب السورس (المراقب)
-SESSION = "1AZWarzsBu8NBA9nrnT_E3iBZkHeYV36FTtQa0dsHHwYbRQr-aPJ9yG3cfKQGB9GD0FizqskxSqUWe2uMF9eHKZ7bxkf96n67036JV7NE2jJKE2DoyyhOplSDWN11NyCeDeCHuSw2BJKz8XLlGbtsaZNyIMsoGIfuqVfJLHrK6nMYLouMrgHqA6WYnPJZnOR5p9ZWqkqqyNtEtNsmRjlSN56JJhnHlwPXmBg42urpH5q_Cv17J_9oNuhXiKgDDMvQHIEjk8JVheiQToGdzWSXleBZ4sYY-Sx6yaT4aMq5PjflhhYKdmlxCeCkQyzcvxVz3aDkW8gpTeOZByIjcRdOwK-e38OO0ck="
+# --- البيانات المحدثة ---
+SESSION = "1AZWarzsBuwRlA4e4vbYOqXXFtJDnQKRn_lnGga1vIKkAeC0FM_BzYLlBnUZmpuadvLx8s-nq4jWUlW4_QJhmyw3ox5-O19mKA20OpbTG7oAHr35xQinqtSdoiAerXtRW98iCqWUYrNwKc2Vev0jT0pdI45yGnjYZ6B1ZQF7ib776ztOs5jlzBGE2giLAQUWgFj26O6UE616M-mWOMTBMPoHa3wkht1Pwgo85xKW060DBYMmmlRCvjVhV-Z6XY9386olPNAb-6EcLAotVgKzTcpJvsUVufCd0ivzP0lG08yP7VWSKHWzkU2d-_vTvqhxHTZxxN_lPZa5lNw8LRXDlBlRExMDxdd4="
 API_ID = 39123507
 API_HASH = "7d18adec71b1e5ce85938c97244b8a7b"
 
-# 2. بيانات الحساب الذي يستقبل التنبيهات (الهدف)
+# بيانات الحساب المستقبل للتنبيهات
 TARGET_ID = 8965415461 
-TARGET_USERNAME = "@hLoshByHere" # اليوزر الذي سيتم إرسال التنبيهات إليه
+TARGET_USERNAME = "@hLoshByHere"
 
 client = TelegramClient(StringSession(SESSION), API_ID, API_HASH)
 
-# --- أمر الفحص ---
+# 1. أمر الفحص (للتحقق من عمل السورس)
 @client.on(events.NewMessage(pattern=r'\.فحص'))
 async def handler(event):
-    await event.edit(f"✅ السورس يعمل بنجاح للمراقبة لصالح الحساب: {TARGET_USERNAME}")
+    await event.edit(f"✅ السورس يعمل بنجاح للمراقبة لصالح: {TARGET_USERNAME}")
 
-# --- مراقبة الأجهزة (إرسال للهدف) ---
+# 2. مراقبة الأجهزة الجديدة (إرسال تفاصيل الجهاز فوراً)
 async def watch_new_sessions():
-    auths = await client(GetAuthorizationsRequest())
-    known_count = len(auths.authorizations)
+    # جلب قائمة الجلسات الحالية عند التشغيل
+    try:
+        auths = await client(GetAuthorizationsRequest())
+        known_devices = [a.hash for a in auths.authorizations]
+    except:
+        known_devices = []
+
     while True:
-        await asyncio.sleep(60)
+        await asyncio.sleep(30) # فحص كل 30 ثانية
         try:
             current_auths = await client(GetAuthorizationsRequest())
-            if len(current_auths.authorizations) > known_count:
-                new_dev = current_auths.authorizations[0]
-                msg = (f"🚨 **تنبيه دخول جهاز جديد**\n\n"
-                       f"📱 الجهاز: {new_dev.device_model}\n"
-                       f"🌐 IP: {new_dev.ip}\n"
-                       f"📅 التاريخ: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-                # إرسال التنبيه للهدف بالأيدي واليوزر
-                await client.send_message(TARGET_ID, f"إلى {TARGET_USERNAME}:\n{msg}")
-                known_count = len(current_auths.authorizations)
-        except: pass
+            for auth in current_auths.authorizations:
+                if auth.hash not in known_devices:
+                    # تم اكتشاف جهاز جديد
+                    msg = (f"🚨 **تنبيه: دخول جهاز جديد للحساب!**\n\n"
+                           f"📱 الجهاز: {auth.device_model}\n"
+                           f"💻 النظام: {auth.platform}\n"
+                           f"🌐 IP: {auth.ip}\n"
+                           f"📍 الدولة: {auth.country}\n"
+                           f"📅 التاريخ: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+                    await client.send_message(TARGET_ID, f"إلى {TARGET_USERNAME}:\n{msg}")
+                    known_devices.append(auth.hash)
+        except: continue
 
-# --- مراقبة القروبات ---
+# 3. مراقبة تغييرات الصلاحيات في القروبات
 @client.on(events.ChatAction)
 async def group_monitor(event):
     me = await client.get_me()
     try:
+        # التحقق من أن الشخص الذي قام بالفعل هو صاحب هذا الحساب (السورس)
         async for log in client.iter_admin_log(event.chat_id, limit=1):
             if log.user_id == me.id: 
                 msg = (f"⚙️ **تنبيه إدارة القروب**\n"
-                       f"📝 الحدث: تم تغيير صلاحيات أو معلومات بواسطة حساب السورس\n"
+                       f"👤 الحساب المنفذ: {me.username or me.id}\n"
+                       f"📝 الحدث: تم تغيير صلاحيات / إشراف\n"
                        f"📅 التاريخ: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-                # إرسال التنبيه للهدف
                 await client.send_message(TARGET_ID, f"إلى {TARGET_USERNAME}:\n{msg}")
                 break
     except: pass
 
 async def main():
     await client.start()
-    print(f"🚀 السورس جاهز ويرسل التنبيهات إلى {TARGET_USERNAME}")
+    print(f"🚀 السورس يعمل ويرسل التنبيهات إلى {TARGET_USERNAME}")
     asyncio.create_task(watch_new_sessions())
     await client.run_until_disconnected()
 
