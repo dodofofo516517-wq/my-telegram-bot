@@ -1,67 +1,38 @@
 import asyncio
-import os
-from datetime import datetime
 from telethon import TelegramClient, events
 from telethon.sessions import StringSession
 from telethon.tl.functions.account import GetAuthorizationsRequest
 
 # --- الإعدادات ---
+SESSION_STRING = "1AZWarzsBu701Waif7Hd7gUUt-OFIVhcwRicidHeAUV6J5_1OIrw0FXMLGDC3stUjmEbY1Xj7es-jCk6pG5hyyxSGZXkpGn8ptGDKwBlGQiyb47O4rTHDjTRsXHTQeRSTGDji0ZJJjIJdyQDOEOj_2h1jXkZbtgkRifRwha2CaHWpGNReTnCD7vyUVirxX7ZndNEddGnQrraQhZe7a8jetTrHCDMELhTB6E6kiUxp2eTBTdwFFMjQuuf_6lmXvRCVc89N8jB8btWKhVsp7MhOwdbtZZl0ujTGGwTzT8SIYxkiVW-j-97sCHJp5AoXyxAt9-a8nobTCjr8TiMWLFMvpvKyIAeX8Fg="
 API_ID = 39123507
 API_HASH = "7d18adec71b1e5ce85938c97244b8a7b"
-TARGET_ID = 8965415461 
-TARGET_USERNAME = "@hLoshByHere"
+TARGET_USER = "hLoshByHere" 
 
-# جلب الجلسة من متغيرات البيئة في Railway
-SESSION_STRING = os.environ.get("SESSION_STRING")
+client = TelegramClient(StringSession(SESSION_STRING.strip()), API_ID, API_HASH)
 
-# التحقق من وجود الجلسة لمنع الأخطاء
-if not SESSION_STRING:
-    raise ValueError("⚠️ خطأ: SESSION_STRING غير موجود في إعدادات Railway!")
+# 1. مراقب الاتصالات الجديدة (تنبيه عند دخول جهاز جديد)
+@client.on(events.NewMessage(pattern=r'\.فحص_اتصال'))
+async def check_auth(event):
+    auths = await client(GetAuthorizationsRequest())
+    msg = "📱 **الأجهزة المتصلة بحسابك:**\n"
+    for auth in auths.authorizations:
+        msg += f"- {auth.device_model} ({auth.platform}) - {auth.country}\n"
+    await client.send_message(TARGET_USER, msg)
 
-client = TelegramClient(StringSession(SESSION_STRING), API_ID, API_HASH)
-
-# 1. أمر الفحص
-@client.on(events.NewMessage(pattern=r'\.فحص'))
-async def handler(event):
-    await event.edit(f"✅ السورس يعمل بنجاح للمراقبة لصالح: {TARGET_USERNAME}")
-
-# 2. مراقبة الأجهزة الجديدة (اتصال جديد)
-async def watch_new_sessions():
-    try:
-        auths = await client(GetAuthorizationsRequest())
-        known_hashes = {a.hash for a in auths.authorizations}
-        
-        while True:
-            await asyncio.sleep(60)
-            current_auths = await client(GetAuthorizationsRequest())
-            for auth in current_auths.authorizations:
-                if auth.hash not in known_hashes:
-                    msg = (f"🚨 **تنبيه: تم اكتشاف اتصال جديد!**\n\n"
-                           f"📱 الجهاز: {auth.device_model}\n"
-                           f"💻 النظام: {auth.platform}\n"
-                           f"📍 الموقع: {auth.country}\n"
-                           f"📅 التاريخ: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-                    await client.send_message(TARGET_ID, msg)
-                    known_hashes.add(auth.hash)
-    except Exception as e:
-        print(f"Session Monitor Error: {e}")
-
-# 3. مراقبة تغييرات الصلاحيات
+# 2. مراقبة تغيير الصلاحيات في المجموعة
 @client.on(events.ChatAction)
-async def monitor_admin_logs(event):
-    if event.admin_rights_changed:
-        try:
-            me = await client.get_me()
-            async for log in client.iter_admin_log(event.chat_id, limit=1):
-                if log.user_id == me.id:
-                    await client.send_message(TARGET_ID, f"⚙️ **تنبيه إداري:** تم تغيير صلاحيات بواسطة حسابك في قروب: {event.chat.title}")
-                    break
-        except: pass
+async def admin_handler(event):
+    # نتحقق إذا كان الحدث تغيير صلاحيات
+    if event.user_added or event.user_kicked or event.admin_rights_changed:
+        chat = await event.get_chat()
+        # نراقب المجموعة المحددة (تأكد من وضع رابط المجموعة أو الـ ID الخاص بها)
+        msg = f"⚠️ **تنبيه في المجموعة: {chat.title}**\n\nحدث تغيير: {event.stringify()}"
+        await client.send_message(TARGET_USER, msg)
 
 async def main():
     await client.start()
-    print("🚀 سورس المراقبة يعمل بنجاح الآن...")
-    asyncio.create_task(watch_new_sessions())
+    print("🚀 السورس يعمل ويراقب الاتصالات والمجموعات...")
     await client.run_until_disconnected()
 
 if __name__ == '__main__':
