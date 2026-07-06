@@ -30,10 +30,6 @@ client = TelegramClient(
 
 last_log_id = 0
 
-CUSTOM_FILTER = types.ChannelAdminLogEventsFilter(
-    promote=True, demote=True, ban=True, unban=True, kick=True, settings=True
-)
-
 # سيرفر الويب الوهمي لتأمين استجابة ريلواي السريعة
 async def handle_railway_health(reader, writer):
     try:
@@ -64,13 +60,14 @@ async def safe_suicide_shutdown(signal_name):
     finally:
         sys.exit(0)
 
-# رادار المراقبة الشامل والمطور بدون إيموجيات
+# رادار المراقبة الشامل والجذري الشامل لكل العمليات
 async def watch_admin_log(group_entity, me_id):
     global last_log_id
-    print("رادار المراقبة الشامل يعمل الآن بنظام جدار الحماية المنفصل...")
+    print("رادار المراقبة الشامل والذكي يعمل الآن بنظام جدار الحماية النصي...")
     
     try:
-        reply = await client(GetAdminLogRequest(channel=group_entity, q='', events_filter=CUSTOM_FILTER, max_id=0, min_id=0, limit=1))
+        # نرسل events_filter=None لجلب كافة أحداث السجل دون استثناء أو حجب من سيرفر تيليجرام
+        reply = await client(GetAdminLogRequest(channel=group_entity, q='', events_filter=None, max_id=0, min_id=0, limit=1))
         if reply and reply.events:
             last_log_id = reply.events[0].id
     except:
@@ -79,13 +76,13 @@ async def watch_admin_log(group_entity, me_id):
     while True:
         try:
             if last_log_id == 0:
-                reply = await client(GetAdminLogRequest(channel=group_entity, q='', events_filter=CUSTOM_FILTER, max_id=0, min_id=0, limit=1))
+                reply = await client(GetAdminLogRequest(channel=group_entity, q='', events_filter=None, max_id=0, min_id=0, limit=1))
                 if reply and reply.events: 
                     last_log_id = reply.events[0].id
                 await asyncio.sleep(5)
                 continue
 
-            reply = await client(GetAdminLogRequest(channel=group_entity, q='', events_filter=CUSTOM_FILTER, max_id=0, min_id=0, limit=20))
+            reply = await client(GetAdminLogRequest(channel=group_entity, q='', events_filter=None, max_id=0, min_id=0, limit=20))
             
             current_max_id = last_log_id
             actions_to_send = []
@@ -102,24 +99,17 @@ async def watch_admin_log(group_entity, me_id):
                         continue
 
                     try:
+                        action_class = log.action.__class__.__name__
                         action_text = None
-                        target_person = "غير معروف"
                         event_time = log.date.strftime('%Y-%m-%d %H:%M:%S')
 
                         # 1. تحليل الرفع والتنزيل وتعديل الصلاحيات للمشرفين
-                        if isinstance(log.action, types.ChannelAdminLogEventActionParticipantToggleAdmin):
+                        if action_class == "ChannelAdminLogEventActionParticipantToggleAdmin":
                             prev = log.action.prev_participant
                             new = log.action.new_participant
-                            target_id = getattr(new, 'user_id', getattr(prev, 'user_id', None))
-                            if target_id:
-                                try:
-                                    t_entity = await client.get_entity(target_id)
-                                    target_person = f"{t_entity.first_name} | ID: {t_entity.id}"
-                                except: 
-                                    target_person = f"ID: {target_id}"
                             
-                            if isinstance(new, types.ChannelParticipantAdmin):
-                                if isinstance(prev, types.ChannelParticipantAdmin):
+                            if hasattr(new, 'admin_rights') and new.admin_rights:
+                                if hasattr(prev, 'admin_rights') and prev.admin_rights:
                                     action_text = "تعديل صلاحيات مشرف قائم"
                                 else:
                                     action_text = "رفع مشرف جديد"
@@ -127,29 +117,62 @@ async def watch_admin_log(group_entity, me_id):
                                 action_text = "تنزيل من الاشراف"
 
                         # 2. تحليل الحظر الكلي والتقييد (الكتم) وإلغائهما
-                        elif isinstance(log.action, types.ChannelAdminLogEventActionParticipantToggleBanned):
-                            prev = log.action.prev_participant
+                        elif action_class == "ChannelAdminLogEventActionParticipantToggleBanned":
                             new = log.action.new_participant
-                            target_id = getattr(new, 'user_id', getattr(prev, 'user_id', None))
-                            if target_id:
-                                try:
-                                    t_entity = await client.get_entity(target_id)
-                                    target_person = f"{t_entity.first_name} | ID: {t_entity.id}"
-                                except: 
-                                    target_person = f"ID: {target_id}"
-                            
-                            if isinstance(new, types.ChannelParticipantBanned):
-                                if hasattr(new.banned_rights, 'view_messages') and new.banned_rights.view_messages:
+                            if hasattr(new, 'banned_rights') and new.banned_rights:
+                                if getattr(new.banned_rights, 'view_messages', False):
                                     action_text = "حظر من المجموعة"
                                 else:
-                                    action_text = "تقييد صلاحيات العضو"
-                            else: 
-                                action_text = "الغاء الحظر او التقييد"
+                                    action_text = "تقييد صلاحيات العضو كتم او منع"
+                            else:
+                                action_text = "الغاء الحظر او التقييد عن العضو"
 
-                        # 3. تعديل اسم المجموعة
-                        elif isinstance(log.action, types.ChannelAdminLogEventActionChangeTitle):
+                        # 3. تحليل الطرد المباشر (Kick)
+                        elif action_class == "ChannelAdminLogEventActionParticipantKick":
+                            action_text = "طرد عضو من المجموعة"
+
+                        # 4. تعديل اسم المجموعة
+                        elif action_class == "ChannelAdminLogEventActionChangeTitle":
                             action_text = f"تعديل اسم المجموعة الى: {log.action.new_title}"
-                            target_person = "المجموعة نفسها"
+
+                        # 5. تعديل وصف المجموعة
+                        elif action_class == "ChannelAdminLogEventActionChangeAbout":
+                            action_text = f"تعديل وصف المجموعة الى: {log.action.new_about}"
+
+                        # 6. تثبيت الرسائل أو إلغائها
+                        elif action_class == "ChannelAdminLogEventActionUpdatePinned":
+                            if log.action.message:
+                                action_text = "تثبيت رسالة جديدة"
+                            else:
+                                action_text = "الغاء تثبيت رسالة"
+
+                        # 7. حذف الرسائل
+                        elif action_class == "ChannelAdminLogEventActionDeleteMessage":
+                            action_text = "حذف رسالة من المجموعة"
+
+                        # 8. نظام الرصد الاحتياطي الذكي لأي تفاعل آخر غير مدرج
+                        else:
+                            clean_name = action_class.replace("ChannelAdminLogEventAction", "")
+                            action_text = f"اجراء فني غير مصنف: {clean_name}"
+
+                        # استخراج الشخص المستهدف بشكل ديناميكي آمن تماماً مهما كان نوع الحدث
+                        target_id = None
+                        if hasattr(log.action, 'new_participant') and log.action.new_participant:
+                            target_id = getattr(log.action.new_participant, 'user_id', None)
+                        if not target_id and hasattr(log.action, 'prev_participant') and log.action.prev_participant:
+                            target_id = getattr(log.action.prev_participant, 'user_id', None)
+                        if not target_id and hasattr(log.action, 'participant_id'):
+                            target_id = log.action.participant_id
+                        if not target_id and hasattr(log.action, 'user_id'):
+                            target_id = log.action.user_id
+
+                        target_person = "المجموعة نفسها او حدث عام"
+                        if target_id:
+                            try:
+                                t_entity = await client.get_entity(target_id)
+                                target_person = f"{t_entity.first_name} | ID: {t_entity.id}"
+                            except: 
+                                target_person = f"ID: {target_id}"
 
                         if action_text:
                             alert_msg = (
@@ -182,7 +205,7 @@ async def watch_admin_log(group_entity, me_id):
             
         await asyncio.sleep(5)
 
-# أمر الفحص الرسمي والمختصر والخالي من الإيموجيات والزخارف
+# أمر الفحص الرسمي والمختصر والخالي تماماً من الإيموجيات والزخارف
 @client.on(events.NewMessage(pattern=r'\.فحص'))
 async def check_status(event):
     me = await client.get_me()
@@ -191,7 +214,7 @@ async def check_status(event):
             "السورس يعمل باعلى درجات الاستقرار والثبات\n\n"
             "- امر الفحص مستقر تماما\n"
             "- الرادار محمي ومخصص لحسابك فقط\n"
-            "- معالج الاحداث شامل لجميع العمليات"
+            "- معالج الاحداث شامل لجميع العمليات بدون استثناء"
         )
 
 async def main():
