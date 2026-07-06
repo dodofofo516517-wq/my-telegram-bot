@@ -1,74 +1,97 @@
 import asyncio
-from datetime import datetime
-import pytz
-from telethon import TelegramClient, events, errors
-from telethon.sessions import StringSession
+import os
+import sys
+import time
+from telethon import TelegramClient, events
 
-# 1. بيانات الحساب الأساسية
-API_ID = 1234567  # استبدله بـ api_id الخاص بك
-API_HASH = "your_api_hash_here"  # استبدله بـ api_hash الخاص بك
-NEW_SESSION = "1AZWarzsBuzJ7j0cOdaUM4F5JnnF-v6CGikZkHYdjTsO024yj4gW16AJp_i856i4OdGOqP_Yh0AUJYrIkx1sVmG8MnEoQgS6fYELp6nDyifr6XVXR__t-eFNjMwxH6MdxXdA8XjGfLx1y-vEJ-57XqMvGvp2tXBo-phYGQN42qS6Lv3OtUjEyT2X0bkHVJ6_v222LPD3scXcFk6JMCDE9vCKcbE-bfryVb5vpXHFwI3hYDcF7qsQHfCwS7-39DisKbXwSmLFWSYOxAv1mgramcefexTIDI7TyGMEsv6G31FJz3KEtNDdwkJh6UgOK9l9He__osLyX8KHscMi7BuTsnkFRpHYPAFM="
+# --- إعدادات الحساب (ضع بياناتك هنا) ---
+API_ID = 123456        # استبدله بـ API ID الخاص بك
+API_HASH = 'your_api_hash_here'
 
-# 2. ضبط التوقيت المعتمد (السعودية)
-SAUDI_TZ = pytz.timezone("Asia/Riyadh")
+# متغير عالمي لتتبع آخر وقت استجاب فيه الرادار
+last_radar_activity = time.time()
 
-# 3. إعدادات الجهاز الحقيقي لعدم حرق الجلسة نهائياً
+# إعداد العميل مع ميزات إعادة الاتصال التلقائي اللانهائي وتوسيع سعة البيانات
 client = TelegramClient(
-    StringSession(NEW_SESSION),
-    api_id=API_ID,
-    api_hash=API_HASH,
-    device_model="iPhone 15 Pro Max",
-    system_version="iOS 17.5",
-    app_version="10.11.1"
+    'radar_session', 
+    API_ID, 
+    API_HASH,
+    connection_retries=None,  # محاولات إعادة اتصال غير محدودة عند انقطاع الإنترنت
+    auto_reconnect=True,      # إعادة اتصال تلقائي فوري
+    flood_sleep_threshold=86400 # التعامل الذكي مع حظر الفلود المؤقت
 )
 
-# ==================== [ قسم الأوامر والاستجابة ] ====================
-# هذا الأمر مدمج الآن لكي تختبر به استجابة البوت فوراً بمجرد تشغيله
-@client.on(events.NewMessage(outgoing=True, pattern=r'^\.تست$|^\.ping$'))
-async def test_command(event):
-    now_saudi = datetime.now(SAUDI_TZ).strftime('%Y-%m-%d %H:%M:%S')
-    await event.edit(f"🚀 **البوت شغال تمام التمام والأوامر تستجيب!**\n⏰ **الوقت الحالي في السعودية:** `{now_saudi}`")
+# --- 1. المعالج الخلفي (العامل الذكي) ---
+async def async_worker_processor(event):
+    """
+    هنا تضع منطق الرادار الخاص بك (فحص الكلمات، التنظيف، إلخ).
+    هذه الدالة تعمل في الخلفية تماماً دون تأخير الرادار الأساسي.
+    """
+    try:
+        # مثال: طباعة نص الرسالة القادمة
+        text = event.raw_text
+        print(f"[{time.strftime('%X')}] الرادار رصد رسالة: {text[:30]}...")
+        
+        # تنبيه: إذا كنت تحتاج لتأخير، استخدم دائماً asyncio.sleep وليس time.sleep
+        await asyncio.sleep(0.1) 
+        
+    except Exception as e:
+        print(f"خطأ أثناء معالجة البيانات في الخلفية: {e}")
 
-# يمكنك إضافة أي أمر آخر هنا بنفس الطريقة، ومثال ذلك:
-# @client.on(events.NewMessage(outgoing=True, pattern=r'^\.تنظيف$'))
-# async def clean_command(event):
-#     ... كود الأمر هنا ...
-
-
-# ==================== [ قسم الرادار المستقل ] ====================
-async def run_radar():
-    print("🛰️ الرادار بدأ العمل في الخلفية بشكل مستقل...")
-    while True:
-        try:
-            # ----------------------------------------------------
-            # ضع كود الرادار الخاص بك (الفحص، الصيد، المراقبة) هنا
-            # ----------------------------------------------------
-            
-            # فاصل زمني إجباري (3 ثوانٍ) لحماية الجلسة من الحرق النهائي
-            await asyncio.sleep(3)
-            
-        except errors.FloodWaitError as e:
-            print(f"⚠️ تليجرام يطلب التهدئة. انتظار {e.seconds} ثانية لحماية الجلسة.")
-            await asyncio.sleep(e.seconds)
-        except Exception as e:
-            print(f"❌ خطأ داخل الرادار: {e}")
-            await asyncio.sleep(5)
-
-
-# ==================== [ محرك التشغيل الرئيسي ] ====================
-async def main():
-    # بدء تشغيل العميل والتحقق من الحساب
-    await client.start()
-    me = await client.get_me()
-    print(f"✅ تم تسجيل الدخول بنجاح باسم: {me.first_name}")
-
-    # الحل الجذري: إطلاق الرادار كمهمة منفصلة في الخلفية لكي لا يعطل الأوامر
-    asyncio.create_task(run_radar())
+# --- 2. الرادار الأساسي (المستقبل الفوري) ---
+@client.on(events.NewMessage(incoming=True))
+async def radar_main_handler(event):
+    global last_radar_activity
+    # تحديث العداد فوراً لإثبات أن الرادار حيّ ويعمل
+    last_radar_activity = time.time()
     
-    # الحل الجذري الثاني: جعل السكربت في حالة استماع دائم ولانهائي للأوامر
-    print("📥 البوت الآن في حالة استماع كاملة ومطلقة لجميع الأوامر...")
+    # الحل الجذري: الرادار لا ينفذ الكود بنفسه، بل يوكّل المهمة للخلفية وينصرف فوراً
+    asyncio.create_task(async_worker_processor(event))
+
+# --- 3. نظام الحارس الذاتي (Watchdog) ---
+async def radar_watchdog():
+    """
+    وظيفة هذا الحارس هي مراقبة الرادار، إذا تجمد الاتصال مع التليجرام 
+    ولم تصل أي تحديثات لفترة طويلة (مثلاً 10 دقائق) والجروبات نشطة، 
+    سيقوم بإعادة تشغيل البرنامج كاملاً كلياً وجذرياً.
+    """
+    global last_radar_activity
+    print("الحارس الذاتي (Watchdog) يعمل الآن في الخلفية...")
+    
+    while True:
+        await asyncio.sleep(60) # يفحص حالة الرادار كل دقيقة
+        
+        # حساب الوقت المنقضي منذ آخر رسالة
+        time_since_last_message = time.time() - last_radar_activity
+        
+        # إذا مرت 10 دقائق (600 ثانية) بدون استجابة (يمكنك تعديل الوقت حسب حاجتك)
+        if time_since_last_message > 600:
+            print("🚨 تحذير: تم كشف تجمد أو خمول غير طبيعي في الرادار!")
+            print("جاري إعادة تشغيل السكريبت كاملاً من الجذور تلقائياً...")
+            
+            # إنهاء العميل بأمان قبل إعادة التشغيل
+            try:
+                await client.disconnect()
+            except:
+                pass
+                
+            # الأمر السحري لإعادة تشغيل الملف برمجياً وكأنه فتح لأول مرة
+            os.execv(sys.executable, ['python'] + sys.argv)
+
+# --- 4. نقطة الانطلاق الأساسية ---
+async def main():
+    print("جاري تشغيل الرادار...")
+    await client.start()
+    print("⚡ الرادار متصل الآن ويعمل بأقصى سرعة استجابة!")
+    
+    # تشغيل نظام الحارس الذاتي بالتوازي مع البوت
+    asyncio.create_task(radar_watchdog())
+    
+    # الحفاظ على تشغيل البوت مستمراً
     await client.run_until_disconnected()
 
-# تشغيل السكربت
 if __name__ == '__main__':
-    client.loop.run_until_complete(main())
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        print("\nتم إيقاف الرادار يدوياً.")
