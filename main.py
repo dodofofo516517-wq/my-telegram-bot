@@ -1,50 +1,56 @@
 import asyncio
+import os
 from telethon import TelegramClient, events
 from telethon.sessions import StringSession
 from telethon.tl.functions.account import GetAuthorizationsRequest
-import os
 
 # --- الإعدادات ---
-# الأفضل قراءة المتغير من Railway مباشرة
 SESSION_STRING = os.environ.get("SESSION_STRING", "")
 API_ID = 39123507
 API_HASH = "7d18adec71b1e5ce85938c97244b8a7b"
-TARGET_USER = "hLoshByHere" 
+TARGET_USER = "hLoshByHere"
+# ايدي المجموعة (يجب الحصول عليه عبر بوت جلب الايدي)
+TARGET_CHAT_ID = -1002245366530 
 
-# 1. تعريف الـ client أولاً (هذا هو الخطأ الذي كان يظهر)
 client = TelegramClient(StringSession(SESSION_STRING.strip()), API_ID, API_HASH)
 
-# 2. الآن نضع أسطر المراقبة (لأن client أصبح معروفاً)
-
-@client.on(events.NewMessage(pattern=r'\.فحص'))
-async def check_bot(event):
-    await event.edit("✅ السورس يعمل ويراقب الصلاحيات والاتصالات!")
-
-@client.on(events.NewMessage(pattern=r'\.فحص_اتصال'))
-async def check_auth(event):
-    auths = await client(GetAuthorizationsRequest())
-    msg = "📱 **الأجهزة المتصلة بحسابك:**\n"
-    for auth in auths.authorizations:
-        status = " (الجهاز الحالي)" if auth.current else ""
-        msg += f"- {auth.device_model} | {auth.country}{status}\n"
-    await client.send_message(TARGET_USER, msg)
-    await event.edit("تم إرسال قائمة الأجهزة لحساب التنبيهات.")
-
 @client.on(events.ChatAction)
-async def monitor_admin_logs(event):
-    # نتحقق من الخاصية بأمان لتجنب أي خطأ
+async def monitor_admin_changes(event):
+    # مراقبة المجموعة المحددة فقط
+    if event.chat_id != TARGET_CHAT_ID:
+        return
+
+    # مراقبة تغيير صلاحيات المشرفين
     if getattr(event, 'admin_rights_changed', False):
         try:
-            chat = await event.get_chat()
-            msg = f"⚠️ **تنبيه: تم تغيير صلاحيات مشرف!**\n\nالدردشة: {chat.title}\nالمشرف: {event.user.first_name}"
+            # جلب تفاصيل الجهاز الحالي
+            auths = await client(GetAuthorizationsRequest())
+            current_device = "غير معروف"
+            for auth in auths.authorizations:
+                if auth.current:
+                    current_device = f"{auth.device_model} ({auth.platform})"
+            
+            # معلومات الشخص الذي تغيرت صلاحياته
+            user = await event.get_user()
+            user_name = user.first_name if user else "غير معروف"
+            user_id = user.id if user else "غير معروف"
+            user_username = f"@{user.username}" if user and user.username else "لا يوجد"
+
+            msg = (
+                f"🚨 **تنبيه تغيير صلاحيات مشرف**\n\n"
+                f"👤 **الشخص:** {user_name}\n"
+                f"🆔 **الأيدي:** `{user_id}`\n"
+                f"🔗 **اليوزر:** {user_username}\n\n"
+                f"💻 **الجهاز المنفذ للأمر:** {current_device}\n"
+                f"💬 **المجموعة:** {event.chat.title}"
+            )
             await client.send_message(TARGET_USER, msg)
         except Exception as e:
-            print(f"خطأ في إرسال التنبيه: {e}")
+            print(f"خطأ في معالجة التنبيه: {e}")
 
-# 3. تشغيل البوت
 async def main():
     await client.start()
-    print("🚀 سورس المراقبة يعمل بنجاح...")
+    print("🚀 سورس المراقبة المتقدم يعمل...")
     await client.run_until_disconnected()
 
 if __name__ == '__main__':
