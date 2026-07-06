@@ -6,12 +6,12 @@ from telethon.sessions import StringSession
 from telethon.errors import AuthKeyDuplicatedError
 from telethon.tl.functions.channels import GetAdminLogRequest
 
-# --- البيانات والمعرفات كاملة ومدمجة بجلسة يوسف المحمية ---
+# --- البيانات والمعرفات كاملة ومحمية ---
 API_ID = 39123507
 API_HASH = "7d18adec71b1e5ce85938c97244b8a7b"
 
-# الجلسة مدمجة ومحمية تماماً هنا
-SESSION_STRING = "1AZWarzsBuI6NhlX5hYsuzTdG7tj2aPYXALgmutL54WkvUPno3S92BEF4K92mliTV6JB8Ghwgv62_uw0hBwDrcUXc29CxKzwgkZEg6Z5c21CA4A3Bcv96BeYSSD0ad0Ac25_tacuSLyZHJqhQUZ43WeznYRU-wFL58XDYLdaqbfwaD8xHG1B-eQHbRDFtno8szObZ0yVw8G-qfdvS6-IzzRJ3xFEvGrQi0TEsTb8ZtKC3yDVGWaWh2X4kAt3dS4XYb77xLXxnRpPiWiE76IDPYgU1glIi7-Abkn9vZb8KrpWlo7mLnOWqFV2WeRVBqTlDalrQG5olKCmq6S2mJorAfhyQIc80ZI="
+# ⚠️ الجلسة القديمة احترقت؛ استخرج جلسة جديدة كلياً وضَعها بين القوسين هنا ⚠️
+SESSION_STRING = "ضَع_كود_الجلسة_الجديد_هنا"
 
 TARGET_CHAT_ID = -1003555828336  # أيدي القروب الكامل (hLoSh)
 TARGET_USER_ID = 8965415461     # أيدي حساب التنبيهات المستهدف
@@ -29,7 +29,7 @@ client = TelegramClient(
 
 last_log_id = 0
 
-# الفلتر النشط لجلب الأحداث المطلوبة
+# الفلتر المصحح والمفعل بالكامل لجلب الأحداث دون حجب
 CUSTOM_FILTER = types.ChannelAdminLogEventsFilter(
     promote=True,  
     demote=True,   
@@ -39,22 +39,22 @@ CUSTOM_FILTER = types.ChannelAdminLogEventsFilter(
     settings=True  
 )
 
-# 🛡️ نظام قطع الاتصال الفوري لحماية الجلسة عند التحديث أو إعادة التشغيل في Railway
+# 🛡️ نظام الانتحار البرمجي لقطع الاتصال فوراً عند التحديث
 async def safe_suicide_shutdown(signal_name):
-    print(f"🚨 [درع الحماية] تم استلام إشارة {signal_name} من Railway!")
-    print("⚡ جاري قطع الاتصال فوراً وبشكل رسمي ونظيف لحماية الجلسة من الحرق...")
+    print(f"🚨 [درع الأمان] تم استلام إشارة {signal_name} من Railway!")
+    print("⚡ جاري قطع الاتصال فوراً ونظيفاً لحماية الجلسة من الحرق...")
     try:
         await client.disconnect()
-        print("✅ تم فصل الجلسة بأمان واختفى السيرفر القديم بسلام.")
+        print("✅ تم فصل الجلسة بأمان واختفى السيرفر القديم.")
     except Exception as e:
         print(f"خطأ أثناء الفصل المفاجئ: {e}")
     finally:
         sys.exit(0)
 
-# دالة مراقبة حسابك الشخصي فقط داخل القروب
+# دالة مراقبة حساب يوسف الشخصي فقط في القروب
 async def watch_admin_log(group_entity, me_id):
     global last_log_id
-    print("👁️ رادار المراقبة الخاص بحسابك فقط يعمل الآن...")
+    print("👁️ رادار المراقبة الخاص بحسابك فقط يعمل الآن بثبات...")
     
     try:
         reply = await client(GetAdminLogRequest(
@@ -67,7 +67,6 @@ async def watch_admin_log(group_entity, me_id):
         ))
         if reply and reply.events:
             last_log_id = reply.events[0].id
-            print(f"📌 تم تحديد نقطة انطلاق السجل الآمنة بالمعرف: {last_log_id}")
     except Exception as e:
         print(f"⚠️ تنبيه السجل الأولي: {e}")
         last_log_id = 0
@@ -108,14 +107,14 @@ async def watch_admin_log(group_entity, me_id):
                     if log.id > current_max_id:
                         current_max_id = log.id
 
-                    # 🎯 الفلتر الحاسم: إذا لم يكن الفعل صادراً منك أنت شخصياً، يتم تجاهله فوراً
+                    # 🎯 الفلتر الحاسم: مراقبة أفعال حساب يوسف فقط وتجاهل باقي المشرفين
                     if log.user_id != me_id:
                         continue
 
                     action_text = None
                     target_person = "غير معروف"
 
-                    # 1️⃣ تحليل الرفع والنزل وتعديل الصلاحيات
+                    # 1️⃣ تحليل الرفع والنزل
                     if isinstance(log.action, types.ChannelAdminLogEventActionParticipantToggleAdmin):
                         prev = log.action.prev_participant
                         new = log.action.new_participant
@@ -136,7 +135,7 @@ async def watch_admin_log(group_entity, me_id):
                         else:
                             action_text = "❌ نزعت الاشراف من شخص (نزل)"
 
-                    # 2️⃣ تحليل الحظر، الكتم، وإلغاء القيود
+                    # 2️⃣ تحليل الحظر والكتم
                     elif isinstance(log.action, types.ChannelAdminLogEventActionParticipantToggleBanned):
                         prev = log.action.prev_participant
                         new = log.action.new_participant
@@ -157,7 +156,6 @@ async def watch_admin_log(group_entity, me_id):
                         else:
                             action_text = "🔓 ألغيت الحظر عن شخص ( Unban )"
 
-                    # 3️⃣ تحليل تغيير اسم المجموعة
                     elif isinstance(log.action, types.ChannelAdminLogEventActionChangeTitle):
                         action_text = f"✏️ غيرت اسم المجموعه إلى: **{log.action.new_title}**"
                         target_person = "المجموعة نفسها"
@@ -195,18 +193,18 @@ async def watch_admin_log(group_entity, me_id):
 async def check_status(event):
     me = await client.get_me()
     if event.sender_id == me.id:
-        await event.edit("✅ **السورس يعمل بأعلى كفاءة وجاهزية!**\n\n• أمر الفحص مستقر.\n• رادار المراقبة مخصص لحسابك أنت فقط الآن.\n• الجلسة محمية برمجيّاً ضد حظر التداخل في Railway.")
+        await event.edit("✅ **السورس مستقر ويعمل بأعلى كفاءة وجاهزية!**\n\n• أمر الفحص مستقر.\n• رادار المراقبة يعمل لحسابك الشخصي فقط.\n• الجلسة محمية ببروتوكول الـ 55 ثانية الأمني ضد تداخل ريلواي.")
 
 async def main():
-    # تسجيل مستشعرات الأمان لحماية الجلسة من الاتصال المزدوج عند الـ Deploy
+    # تسجيل مستشعرات الأمان لحماية الجلسة من الاتصال المزدوج
     loop = asyncio.get_running_loop()
     if sys.platform != 'win32':
         for sig in (signal.SIGTERM, signal.SIGINT):
             loop.add_signal_handler(sig, lambda s=sig: asyncio.create_task(safe_suicide_shutdown(s.name)))
 
-    # تأخير أمان أولي للتأكد من موت النسخة السابقة تماماً في ريلواي لحماية الجلسة
-    print("⏳ [بروتوكول الأمان] يتم الآن الانتظار لـ 15 ثانية لتصفير السيرفرات السابقة تماماً وتأمين جلستك من الحرق...")
-    await asyncio.sleep(15)
+    # 🛡️ الحصن الفولاذي: الانتظار 55 ثانية لضمان موت السيرفر القديم تماماً قبل بدء الاتصال
+    print("⏳ [بروتوكول الأمان الفولاذي] جاري الانتظار لـ 55 ثانية للتأكد من تدمير السيرفر القديم وحماية جلستك الجديدة من الحرق...")
+    await asyncio.sleep(55)
     
     print("🚀 جاري الاتصال الآمن بالسيرفرات الرسمية لتيليجرام...")
     try:
@@ -216,12 +214,12 @@ async def main():
         group_entity = await client.get_entity(TARGET_CHAT_ID)
         me = await client.get_me()
         
-        # تشغيل رادار المراقبة لحسابك الشخصي فقط
+        # تشغيل رادار المراقبة لحسابك الشخصي
         client.loop.create_task(watch_admin_log(group_entity, me.id))
         await client.run_until_disconnected()
         
     except AuthKeyDuplicatedError:
-        print("❌ خطأ حرج: الجلسة مكررة أو محروقة!")
+        print("❌ خطأ حرج: الجلسة محروقة! تأكد من استخراج واحدة جديدة تماماً وضعها في الكود.")
         sys.exit(1)
     except Exception as e:
         print(f"❌ حدث خطأ غير متوقع: {e}")
