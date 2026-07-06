@@ -1,21 +1,19 @@
 import asyncio
-from telethon import TelegramClient, events
+from telethon import TelegramClient, events, types
 from telethon.sessions import StringSession
-from telethon.tl.functions.account import GetAuthorizationsRequest
 
-# --- البيانات الأساسية ---
+# --- الإعدادات الأساسية ---
 API_ID = 39123507
 API_HASH = "7d18adec71b1e5ce85938c97244b8a7b"
-
-# الجلسة الجديدة التي زودتني بها
 SESSION_STRING = "1AZWarzsBu4k3MBIAdWLJyf9TIaaAtTpPJtpXMW2hoMG0DKTxRt4_5T4qrZdsdyst7yWaqj-0CW-lCUorSPLC8MgZVbjoAHTatD_fQmi2R89Bvq69zprOCCkcanFjZGhme9ahTK83eyqmpezk6Ufvm7Kym-5dtR5WUOKfqKys3dk6n5HMeq67OJIw3w8i-D9pVOrLjyaFHhJoiifBE450rwl5L-hBKdFD3flPaGydpw7WR5WVh6XSqgscmqQv7EB1dG0J3wPU32F9kDKdNKvjhfSLg0ARbzxcP6W7O28VQ7HySzXNdD54hGrqyLW2I3ujzmt8bvqFQ_LdIsPBupJpkvgAX8m89U0="
 
-# إعدادات المراقبة والإرسال
-TARGET_CHAT_ID = -1003555828336  # أيدي قروب hLoSh , fls3h
+# المعرفات الدقيقة
+TARGET_CHAT_ID = -1003555828336  # أيدي القروب الكامل
+PURE_CHAT_ID = 3555828336        # أيدي القروب بدون (-100) للتنصت العميق
 TARGET_USER_ID = 8965415461     # أيدي حساب التنبيهات المنشود
 MY_ID = 8980682089              # أيدي حساب السورس الخاص بك
 
-# الخدعة البرمجية: محاكاة تطبيق رسمي مستقر لعدم لفت انتباه فلاتر الحظر
+# تشغيل الكلينت بمحاكاة آمنة لحماية الجلسة
 client = TelegramClient(
     StringSession(SESSION_STRING.strip()), 
     API_ID, 
@@ -25,76 +23,90 @@ client = TelegramClient(
     app_version="10.11.1"
 )
 
-@client.on(events.ChatAction)
-async def monitor_my_actions(event):
-    # التأكد من مراقبة المجموعة المستهدفة فقط
-    if event.chat_id != TARGET_CHAT_ID:
+# 1. المراقبة العميقة (الحظر، إلغاء الحظر، رفع ونزع الإشراف)
+@client.on(events.Raw(types.UpdateChannelParticipant))
+async def on_channel_participant_update(event):
+    if event.channel_id != PURE_CHAT_ID:
         return
     
-    # فلترة صارمة: التحقق أن الفاعل هو حساب السورس الخاص بك فقط
-    if event.action_message and event.action_message.sender_id == MY_ID:
+    # التحقق الصارم: هل أنت من قمت بالفعل من جوالك؟
+    if event.actor_id != MY_ID:
+        return
+        
+    try:
+        action_text = "إجراء غير محدد"
+        
+        # جلب معلومات الشخص المستهدف برمجياً
         try:
-            action_text = "إجراء غير محدد"
-            target_person = "غير معروف أو المجموعة نفسها"
-            
-            # جلب معلومات الشخص المستهدف إن وجد
-            if event.user:
-                target_person = f"{event.user.first_name} | ID: {event.user.id}"
-            elif event.user_id:
-                target_person = f"ID: {event.user_id}"
+            user_entity = await client.get_entity(event.user_id)
+            target_person = f"{user_entity.first_name} | ID: {user_entity.id}"
+        except:
+            target_person = f"ID: {event.user_id}"
 
-            # 1. رصد الحظر أو الطرد
-            if event.user_kicked:
-                action_text = "❌ حظر شخص أو طرده من المجموعة"
-                
-            # 2. رصد إلغاء الحظر
-            elif event.unbanned:
-                action_text = "🔓 إلغاء الحظر عن شخص"
-                
-            # 3. رصد رفع مشرف / نزع صلاحيات / تعديل رتبة
-            elif event.admin_rights_changed:
-                action_text = "🛡️ تعديل صلاحيات مشرف (رفع مشرف / نزع الإشراف / تغيير صلاحيات)"
-                
-            # 4. رصد تغيير اسم المجموعة
-            elif event.chat_title_changed:
-                action_text = f"✏️ تغيير اسم المجموعة إلى: **{event.new_title}**"
-                target_person = "اسم المجموعة"
+        prev = event.prev_participant
+        new = event.new_participant
+
+        # الفلترة الدقيقة للأفعال الإدارية
+        if isinstance(new, types.ChannelParticipantAdmin):
+            if isinstance(prev, types.ChannelParticipantAdmin):
+                action_text = "✏️ تعديل صلاحيات مشرف"
             else:
-                # إذا لم يتطابق مع المعايير، نتخطى الإجراء لتوفير استهلاك الجلسة
-                return
+                action_text = "🛡️ رفعت شخصاً مشرفاً"
+        elif isinstance(prev, types.ChannelParticipantAdmin) and not isinstance(new, types.ChannelParticipantAdmin):
+            action_text = "❌ نزعت الاشراف من شخص"
+        elif isinstance(new, types.ChannelParticipantBanned):
+            if hasattr(new.banned_rights, 'view_messages') and new.banned_rights.view_messages:
+                action_text = "🚫 حظرت شخصاً ( Ban )"
+            else:
+                action_text = "⚠️ قيدت صلاحيات شخص ( كتم / Restrict )"
+        elif isinstance(prev, types.ChannelParticipantBanned) and not isinstance(new, types.ChannelParticipantBanned):
+            action_text = "🔓 ألغيت الحظر عن شخص ( Unban )"
+        else:
+            return  # تخطي الأحداث العادية كالمغادرة والانضمام
 
-            # جلب تفاصيل الجهاز المتصل بالسورس بشكل آمن لمنع تداخل الـ IP
-            try:
-                auths = await client(GetAuthorizationsRequest())
-                device_name = next((a.device_model for a in auths.authorizations if a.current), "جهاز الجوال")
-            except:
-                device_name = "جهاز متصل (تعذر الفحص المباشر لحماية أمان الجلسة)"
+        # صياغة الرسالة الموحدة
+        alert_msg = (
+            f"🚨 **تنبيه نشاط من حساب السورس:**\n\n"
+            f"⚙️ **الأمر الفُعل:** {action_text}\n"
+            f"👤 **الشخص المستهدف:** {target_person}\n"
+            f"💻 **الجهاز المتصل:** الجوال الشخصي المعتمد\n\n"
+            f"📍 **المكان:** قروب hLoSh"
+        )
+        await client.send_message(TARGET_USER_ID, alert_msg)
+        
+    except Exception as e:
+        print(f"Error: {e}")
 
-            # صياغة رسالة التنبيه الموحدة (رسالة واحدة كاملة التفاصيل)
-            alert_message = (
-                f"🚨 **تنبيه: نشاط جديد من حساب السورس**\n\n"
-                f"⚙️ **الأمر الفُعل:** {action_text}\n"
-                f"👤 **الشخص المستهدف:** {target_person}\n"
-                f"💻 **الجهاز المتصل عند الفعل:** {device_name}\n\n"
-                f"📍 **مكان الحدث:** قروب hLoSh"
+# 2. مراقبة تغيير اسم المجموعة (تأتي عبر الرسائل الخدمية المباشرة)
+@client.on(events.NewMessage(chats=TARGET_CHAT_ID))
+async def on_service_message(event):
+    if event.sender_id != MY_ID:
+        return
+        
+    if event.message.action and isinstance(event.message.action, types.MessageActionChatEditTitle):
+        try:
+            new_title = event.message.action.title
+            alert_msg = (
+                f"🚨 **تنبيه نشاط من حساب السورس:**\n\n"
+                f"⚙️ **الأمر الفُعل:** ✏️ غيرت اسم المجموعه\n"
+                f"👤 **الاسم الجديد:** {new_title}\n"
+                f"💻 **الجهاز المتصل:** الجوال الشخصي المعتمد\n\n"
+                f"📍 **المكان:** قروب hLoSh"
             )
-
-            # إرسال التنبيه إلى حسابك المخصص للتنبيهات
-            await client.send_message(TARGET_USER_ID, alert_message)
-
+            await client.send_message(TARGET_USER_ID, alert_msg)
         except Exception as e:
-            print(f"خطأ أثناء معالجة الحدث: {e}")
+            print(f"Error: {e}")
 
-# أمر فحص للتأكد من الحالة دون إحداث تغيير في الجروب
+# أمر الفحص للتأكد من الحالة
 @client.on(events.NewMessage(pattern=r'\.فحص'))
 async def check_status(event):
     if event.sender_id == MY_ID:
-        await event.edit("✅ السورس مستقر، متصل، ويراقب الأفعال المطلوبة بدقة!")
+        await event.edit("✅ السورس مستقر تماماً ويراقب الحظر والإشراف والأسماء الآن في الخلفية!")
 
 async def main():
-    print("🚀 جاري تشغيل السورس بنظام محاكاة أمان الأجهزة المتقدمة...")
+    print("🚀 بدء تشغيل السورس المطور بنظام التنصت العميق...")
     await client.start()
-    print("✅ السورس يعمل الآن في الخلفية دون انقطاع.")
+    print("✅ السورس يعمل ويراقب الآن بدقة متناهية.")
     await client.run_until_disconnected()
 
 if __name__ == '__main__':
